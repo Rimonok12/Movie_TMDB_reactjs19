@@ -1,16 +1,9 @@
-import Search from './components/search';
-
-import React, { useState, useEffect } from 'react';
-
-import Spinner from './components/Spinner';
-import MovieCard from './components/MovieCard';
-// import React, { useState, useEffect } from 'react';
-// import Search from './components/Search';
-// import Spinner from './components/Spinner';
-// import MovieCard from './components/MovieCard';
+import { useEffect, useState } from 'react';
+import Search from './components/Search.jsx';
+import Spinner from './components/Spinner.jsx';
+import MovieCard from './components/MovieCard.jsx';
 import { useDebounce } from 'react-use';
-import { getTrendingMovies } from './appwrite';
-// import { getTrendingMovies } from './appwrite';
+import { getTrendingMovies, updateSearchCount } from './appwrite.js';
 
 const API_BASE_URL = 'https://api.themoviedb.org/3';
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
@@ -24,22 +17,16 @@ const API_OPTIONS = {
 };
 
 const App = () => {
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+
   const [movieList, setMovieList] = useState([]);
+  const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [debouncedSearchTerm, setDebouncedSearchedTerm] = useState('');
   const [trendingMovies, setTrendingMovies] = useState([]);
 
-  useDebounce(
-    () => {
-      setDebouncedSearchedTerm(searchTerm);
-    },
-    500,
-    [searchTerm]
-  );
+  useDebounce(() => setDebouncedSearchTerm(searchTerm), 500, [searchTerm]);
 
-  // Fetch movies from the TMDB API
   const fetchMovies = async (query = '') => {
     setIsLoading(true);
     setErrorMessage('');
@@ -56,7 +43,22 @@ const App = () => {
       }
 
       const data = await response.json();
+
+      if (data.Response === 'False') {
+        setErrorMessage(data.Error || 'Failed to fetch movies');
+        setMovieList([]);
+        return;
+      }
+
       setMovieList(data.results || []);
+
+      if (query && data.results.length > 0) {
+        try {
+          await updateSearchCount(query, data.results[0]);
+        } catch (error) {
+          console.error('Failed to update search count:', error);
+        }
+      }
     } catch (error) {
       console.error(`Error fetching movies: ${error}`);
       setErrorMessage('Error fetching movies. Please try again later.');
@@ -65,21 +67,15 @@ const App = () => {
     }
   };
 
-  // seEffect(() => {
-  //   loadTrendingMovies();
-  // }, []);
-
   const loadTrendingMovies = async () => {
     try {
       const movies = await getTrendingMovies();
-      console.log('Fetched trending movies:', movies); // Check if data is returned
       setTrendingMovies(movies);
     } catch (error) {
       console.error(`Error fetching trending movies: ${error}`);
     }
   };
 
-  // Fetch movies when the component mounts or searchTerm changes
   useEffect(() => {
     fetchMovies(debouncedSearchTerm);
   }, [debouncedSearchTerm]);
@@ -99,29 +95,29 @@ const App = () => {
             Find <span className="text-gradient">Movies</span> You'll Enjoy
             Without the Hassle
           </h1>
-          {/* Search Component */}
+
           <Search searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
         </header>
-        {/* TODO:_________________________________________________ */}
+
         {trendingMovies.length > 0 && (
           <section className="trending">
             <h2>Trending Movies</h2>
-
             <ul>
               {trendingMovies.map((movie, index) => (
                 <li key={movie.$id}>
                   <p>{index + 1}</p>
-                  <img src={movie.poster_url} alt={movie.title} />
+                  <img
+                    src={movie.poster_url}
+                    alt={movie.searchTerm || 'Movie'}
+                  />
                 </li>
               ))}
             </ul>
           </section>
         )}
 
-        {/* TODO:_________________________________________________ */}
-        {/* Movies Section */}
         <section className="all-movies">
-          <h2>All Trending Movies</h2>
+          <h2>All Movies</h2>
 
           {isLoading ? (
             <Spinner />
